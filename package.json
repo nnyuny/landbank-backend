@@ -1,0 +1,26 @@
+{
+  "name": "landbank-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp @terrenos — LandBank YUNY",
+  "main": "whatsapp-bot.js",
+  "scripts": {
+    "bot": "node whatsapp-bot.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.5",
+    "firebase": "^10.12.0",
+    "imapflow": "^1.0.98",
+    "mailparser": "^3.7.1",
+    "nodemailer": "^6.9.14",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0",
+    "xlsx": "^0.18.5"
+  },
+  "allowScripts": {
+    "puppeteer@24.38.0": true,
+    "protobufjs@7.6.4": true,
+    "protobufjs@6.8.8": true
+  }
+}
