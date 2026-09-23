@@ -2268,12 +2268,17 @@ http.createServer((req, res) => {
 
     // GET /api/itbi?sql=XXX (&exact=1 pra restringir ao lote específico, sem
     // agrupar condomínio/quadra — usado pela camada "Mapa de Preços")
+    // &numero=XXX — quando cai no agrupamento por quadra (lote 0000/0001),
+    // tenta restringir ainda mais às transações com o mesmo número de porta
+    // do lote clicado (ver query_sql/_norm_numero em processar_itbi.py)
     if (itbiPath === '/api/itbi' && req.method === 'GET') {
       const sqlParam = itbiUrl.searchParams.get('sql') || '';
       const exactParam = itbiUrl.searchParams.get('exact');
+      const numeroParam = itbiUrl.searchParams.get('numero') || '';
       if (!sqlParam) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: 'sql param required' })); return; }
       const pyArgs = [path.join(DIR, 'processar_itbi.py'), '--query-sql', sqlParam];
       if (exactParam) pyArgs.push('--exact');
+      if (numeroParam) pyArgs.push('--numero', numeroParam);
       const py = spawn(PY_CMD, pyArgs, { windowsHide: true });
       let out = '';
       py.stdout.on('data', d => out += d);

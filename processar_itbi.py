@@ -493,12 +493,30 @@ def _rows_to_dicts(conn, query, params=()):
     cols = [d[0] for d in cur.description] if cur.description else []
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-def query_sql(sql_raw, limit=200, exact=False):
+def _norm_numero(v):
+    """Extrai só os dígitos do número de porta (ex: '1304', '1304.0', 'nº 1304'
+    todos viram '1304') pra comparar número de rua entre GeoSampa e ITBI sem
+    depender de formatação exata."""
+    if v is None:
+        return ''
+    m = re.search(r'\d+', str(v))
+    if not m:
+        return ''
+    return m.group(0).lstrip('0') or '0'
+
+def query_sql(sql_raw, limit=200, exact=False, numero=None):
     """Consulta transacoes ITBI por SQL. Retorna JSON.
     Para condominios (lote 0000/0001), retorna todas as unidades agrupadas —
     a menos que exact=True, que sempre restringe ao SQL/lote especifico
     (usado pela camada "Mapa de Preços", onde cada lote deve mostrar só as
     suas próprias transações, não o condomínio/quadra inteira).
+    Quando cai no agrupamento por quadra e `numero` é informado (número de
+    porta do lote clicado, vindo do GeoSampa), tenta restringir ainda mais
+    às transações com o MESMO número de porta — no cadastro de condomínios
+    grandes (uma quadra inteira, várias casas/prédios), isso aproxima bem
+    mais do "prédio/casa específica clicada" do que a quadra toda. Se nada
+    bater com esse número (dado sujo/ausente), cai de volta pra quadra
+    inteira sem filtro, marcando `filtrado_por_numero:false` na resposta.
     """
     if not _db_disponivel():
         return json.dumps({"ok": False, "error": "Banco ITBI nao processado ainda.", "rows": []})
@@ -511,12 +529,21 @@ def query_sql(sql_raw, limit=200, exact=False):
         conn = _get_conn()
         if is_condo:
             prefix = _sql_prefix(sql_norm)
-            rows = _rows_to_dicts(conn,
-                "SELECT * FROM itbi WHERE sql_prefix = ? ORDER BY data_transacao DESC LIMIT ?",
-                (prefix, limit))
+            rows_all = _rows_to_dicts(conn,
+                "SELECT * FROM itbi WHERE sql_prefix = ? ORDER BY data_transacao DESC",
+                (prefix,))
             conn.close()
+            num_norm = _norm_numero(numero)
+            filtrado_por_numero = False
+            rows = rows_all
+            if num_norm:
+                rows_filtro = [r for r in rows_all if _norm_numero(r.get('numero')) == num_norm]
+                if rows_filtro:
+                    rows = rows_filtro
+                    filtrado_por_numero = True
             return json.dumps({"ok": True, "sql": sql_norm, "prefix": prefix,
-                               "is_condo": True, "rows": rows}, ensure_ascii=False)
+                               "is_condo": True, "filtrado_por_numero": filtrado_por_numero,
+                               "rows": rows[:limit]}, ensure_ascii=False)
         else:
             rows = _rows_to_dicts(conn,
                 "SELECT * FROM itbi WHERE sql = ? ORDER BY data_transacao DESC LIMIT ?",
@@ -695,6 +722,8 @@ if __name__ == '__main__':
                         help='Consulta transacoes por SQL e imprime JSON')
     parser.add_argument('--exact', action='store_true',
                         help='Com --query-sql, restringe ao lote especifico (nunca agrupa condominio/quadra)')
+    parser.add_argument('--numero', default=None,
+                        help='Com --query-sql, quando cair no agrupamento por quadra tenta restringir pelo numero de porta do lote clicado')
     parser.add_argument('--batch-sql', dest='batch_sql', default=None,
                         help='Consulta batch de SQLs (JSON array) e imprime mapa JSON')
     parser.add_argument('--mapa-precos', dest='mapa_precos', default=None,
@@ -704,7 +733,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.query_sql:
-        print(query_sql(args.query_sql, exact=args.exact))
+        print(query_sql(args.query_sql, exact=args.exact, numero=args.numero))
     elif args.batch_sql:
         print(batch_query_sql(args.batch_sql))
     elif args.mapa_precos:
